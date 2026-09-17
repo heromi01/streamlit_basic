@@ -150,6 +150,19 @@ def render_chat_sidebar():
             on_change=on_sidebar_key_change
         )
 
+        # API Key 유효성 즉시 검사 버튼
+        if st.button("🔍 API Key 연결 확인", use_container_width=True):
+            test_key = st.session_state.api_key.strip()
+            if not test_key:
+                st.warning("API Key를 먼저 입력해주세요.")
+            else:
+                try:
+                    test_client = OpenAI(api_key=test_key)
+                    test_client.models.list()
+                    st.success("✅ OpenAI API Key가 정상 확인되었습니다!")
+                except Exception as test_err:
+                    st.error(f"❌ API Key 인증 실패: {test_err}")
+
         # 🧠 AI 모델 선택 (GPT-5.5 이상 모델 규격만 제공)
         model_options = [
             "gpt-5.5",
@@ -378,13 +391,33 @@ def show_chat_page():
                 role="assistant",
                 content=assistant_response
             )
-        except Exception as err:
-            st.error(f"❌ OpenAI API 호출 오류: {err}")
-            if "does not exist" in str(err) or "model_not_found" in str(err):
-                st.info(f"💡 선택하신 모델(`{selected_model}`)에 대한 OpenAI API 접근 권한 또는 모델 지원 여부를 확인해주세요.")
 
-        # 완료 후 화면 갱신
-        st.rerun()
+            # 정상 응답 및 DB 저장 완료 시에만 화면 갱신
+            st.rerun()
+
+        except Exception as err:
+            err_str = str(err)
+            if "Incorrect API key" in err_str or "invalid_api_key" in err_str or "401" in err_str:
+                st.error("""
+                ### 🔑 OpenAI API Key 인증 실패 (401 Unauthorized)
+                등록된 OpenAI API Key가 올바르지 않거나 만료되었습니다.  
+                좌측 사이드바의 **OpenAI API Key 등록/변경** 입력창에 현재 유효한 API Key(`sk-...`)를 입력한 후 다시 질문해주세요.
+                """)
+            elif "does not exist" in err_str or "model_not_found" in err_str or "404" in err_str:
+                st.error(f"""
+                ### 🧠 모델 접근 오류 (404 Not Found)
+                선택하신 모델(`{selected_model}`)은 현재 OpenAI 계정에서 지원되지 않거나 API 접근 권한이 없습니다.  
+                사이드바에서 다른 모델을 선택하시거나 계정 권한을 확인해주세요.
+                """)
+            elif "rate_limit" in err_str or "quota" in err_str or "429" in err_str:
+                st.error("""
+                ### ⏳ API 사용 한도 초과 또는 잔액 부족 (429 Rate Limit)
+                OpenAI 계정의 크레딧 잔액이 부족하거나 일시적인 분당 요청 한도에 도달했습니다.  
+                OpenAI 플랫폼 대시보드에서 크레딧 잔액 및 결제 수단을 확인해주세요.
+                """)
+            else:
+                st.error(f"❌ OpenAI API 호출 중 오류가 발생했습니다: {err_str}")
+            # ※ 주의: 오류 발생 시에는 st.rerun()을 실행하지 않아야 사용자가 오류 내용을 확인하고 조치할 수 있습니다.
 
 
 # ========================================================
