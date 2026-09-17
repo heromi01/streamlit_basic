@@ -148,6 +148,57 @@ def get_db_stats(db_path=DB_PATH):
         "assistant_messages": assistant_messages
     }
 
+def get_daily_stats(db_path=DB_PATH):
+    """일자별 메시지 발화량 통계 (날짜, 전체, 사용자, AI)"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    query = """
+        SELECT 
+            substr(created_at, 1, 10) as msg_date,
+            COUNT(*) as total_count,
+            SUM(CASE WHEN role = 'user' THEN 1 ELSE 0 END) as user_count,
+            SUM(CASE WHEN role = 'assistant' THEN 1 ELSE 0 END) as assistant_count
+        FROM messages
+        GROUP BY msg_date
+        ORDER BY msg_date ASC
+    """
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "date": r[0],
+            "total": r[1],
+            "user": r[2],
+            "assistant": r[3]
+        }
+        for r in rows
+    ]
+
+def get_session_message_counts(db_path=DB_PATH):
+    """세션별 메시지 수 상위 목록"""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    query = """
+        SELECT s.id, s.title, s.created_at, COUNT(m.id) as msg_count
+        FROM sessions s
+        LEFT JOIN messages m ON s.id = m.session_id
+        GROUP BY s.id, s.title, s.created_at
+        ORDER BY msg_count DESC, s.created_at DESC
+    """
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {
+            "id": r[0],
+            "title": r[1],
+            "created_at": r[2],
+            "msg_count": r[3]
+        }
+        for r in rows
+    ]
+
 def search_messages(keyword, db_path=DB_PATH):
     """키워드가 포함된 메시지와 해당 세션 정보 검색"""
     conn = get_connection(db_path)
