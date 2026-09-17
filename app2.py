@@ -39,7 +39,7 @@ if "login_user" not in st.session_state:
 
 # 화면 이동 메뉴 기본값
 if "current_menu" not in st.session_state:
-    st.session_state.current_menu = "💬 실시간 AI 채팅"
+    st.session_state.current_menu = "🤖 AI 멀티모달 챗봇"
 
 # 현재 대화 세션 ID 초기화
 if "current_session_id" not in st.session_state:
@@ -114,20 +114,20 @@ def show_login_page():
 def render_chat_sidebar():
     """사이드바 설정 패널 (접속 정보, API Key, 모델 선택, 세션 관리)"""
     with st.sidebar:
-        st.markdown(f"👤 접속자: **{st.session_state.login_user or '게스트'}**님")
-        if st.button("🚪 로그아웃", use_container_width=True):
-            st.session_state.is_logged_in = False
-            st.session_state.login_user = ""
-            st.rerun()
+        # 단독 실행 모드일 때만 사용자 정보 및 로그아웃 버튼 노출 (포털 모드에서는 app.py에서 단일 렌더링)
+        if not st.session_state.get("is_portal_mode", False):
+            st.markdown(f"👤 접속자: **{st.session_state.login_user or '게스트'}**님")
+            if st.button("🚪 로그아웃", use_container_width=True):
+                st.session_state.is_logged_in = False
+                st.session_state.login_user = ""
+                st.rerun()
+            st.divider()
 
-        st.divider()
-
-        # 화면 전환 메뉴 (단독 실행 모드일 때 라디오 노출)
-        if st.session_state.current_menu in ["💬 실시간 AI 채팅", "📜 과거 대화 히스토리"]:
+            # 화면 전환 메뉴 (단독 실행 모드일 때 라디오 노출)
             nav_choice = st.radio(
                 "🧭 화면 이동",
-                ["💬 실시간 AI 채팅", "📜 과거 대화 히스토리"],
-                index=0 if st.session_state.current_menu == "💬 실시간 AI 채팅" else 1,
+                ["🤖 AI 멀티모달 챗봇", "📜 대화 히스토리 & 분석"],
+                index=0 if st.session_state.current_menu == "🤖 AI 멀티모달 챗봇" else 1,
                 key="sidebar_nav_radio"
             )
             if nav_choice != st.session_state.current_menu:
@@ -269,7 +269,7 @@ def show_chat_page():
     col_top1, col_top2 = st.columns([1, 4])
     with col_top1:
         if st.button("📜 과거 대화 내역 전체보기", type="secondary", use_container_width=True):
-            st.session_state.current_menu = "📜 과거 대화 히스토리"
+            st.session_state.current_menu = "📜 대화 히스토리 & 분석"
             st.rerun()
 
     st.divider()
@@ -427,7 +427,7 @@ if __name__ == "__main__":
     if not st.session_state.is_logged_in:
         show_login_page()
     else:
-        if st.session_state.current_menu == "💬 실시간 AI 채팅":
+        if st.session_state.current_menu == "🤖 AI 멀티모달 챗봇":
             show_chat_page()
         else:
             show_history_page()

@@ -37,6 +37,12 @@ def show_admin_analytics_page():
     """관리자 전용 통계 분석 및 세션 관리 대시보드"""
     apply_custom_css()
 
+    # 0. 전역 로그인 여부 검증 (미인증 사용자는 로그인 화면 렌더링 후 차단)
+    if not st.session_state.get("is_logged_in", False):
+        from app2 import show_login_page
+        show_login_page()
+        return
+
     # 1. 관리자 2차 인증 상태 관리
     if "is_admin_authenticated" not in st.session_state:
         st.session_state.is_admin_authenticated = False

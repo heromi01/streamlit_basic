@@ -12,6 +12,12 @@ def render_history_page(chat_page=None):
     """과거 대화 히스토리 대시보드 화면 렌더링"""
     apply_custom_css()
 
+    # 로그인 여부 검증 (미인증 사용자는 로그인 화면 렌더링 후 차단)
+    if not st.session_state.get("is_logged_in", False):
+        from app2 import show_login_page
+        show_login_page()
+        return
+
     # 1. 상단 타이틀 및 간결한 소개 안내
     st.title("📜 과거 대화 히스토리 및 분석 (Chat History)")
     st.markdown("SQLite 데이터베이스(`chat_history.db`)에 보관된 **최대 10개 대화 세션**의 텍스트 대화 내역을 탐색하고 내보낼 수 있는 대시보드입니다.")
@@ -21,7 +27,7 @@ def render_history_page(chat_page=None):
     col_nav1, col_nav2 = st.columns([1, 3])
     with col_nav1:
         if st.button("💬 실시간 AI 채팅으로 돌아가기", type="primary", use_container_width=True):
-            st.session_state["current_menu"] = "💬 실시간 AI 채팅"
+            st.session_state["current_menu"] = "🤖 AI 멀티모달 챗봇"
             st.rerun()
 
     st.divider()
@@ -47,12 +53,12 @@ def render_history_page(chat_page=None):
     with st.sidebar:
         st.header("🔍 대화 탐색 및 세션 선택")
 
-        # 실시간 대화창 복귀 링크
-        if st.button("💬 실시간 채팅창 열기", use_container_width=True):
-            st.session_state["current_menu"] = "💬 실시간 AI 채팅"
-            st.rerun()
-
-        st.divider()
+        # 실시간 대화창 복귀 링크 (단독 실행 모드일 때만 노출)
+        if not st.session_state.get("is_portal_mode", False):
+            if st.button("💬 실시간 채팅창 열기", use_container_width=True):
+                st.session_state["current_menu"] = "🤖 AI 멀티모달 챗봇"
+                st.rerun()
+            st.divider()
 
         # [3-A] 본문 키워드 통합 검색
         st.subheader("🔎 키워드 통합 검색")
