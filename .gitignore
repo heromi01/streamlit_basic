@@ -1,0 +1,27 @@
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Environment Variables (Secrets - NEVER COMMIT)
+.env
+.env.*
+!.env.example
+
+# Local SQLite Database
+*.db
+chat_history.db
+
+# Streamlit
+.streamlit/secrets.toml
+
+# IDE & Editor
+.vscode/
+.idea/
+.DS_Store

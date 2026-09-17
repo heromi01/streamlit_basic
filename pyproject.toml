@@ -1,0 +1,10 @@
+[project]
+name = "streamlit-basic"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "openai>=3.14.1",
+    "pandas>=3.0.5",
+    "python-dotenv>=1.2.3",
+    "streamlit>=1.64.0",
+]
