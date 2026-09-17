@@ -55,9 +55,9 @@ if "current_session_id" not in st.session_state:
 if "api_key" not in st.session_state:
     st.session_state.api_key = os.getenv("OPENAI_API_KEY", "")
 
-# AI 모델 기본값 설정 (안정적으로 동작하는 gpt-4o 기본)
+# AI 모델 기본값 설정 (GPT-5.5 이상 모델 규격)
 if "selected_model" not in st.session_state:
-    st.session_state.selected_model = "gpt-4o"
+    st.session_state.selected_model = "gpt-5.5"
 
 # 시스템 프롬프트 기본값
 if "system_prompt" not in st.session_state:
@@ -150,24 +150,26 @@ def render_chat_sidebar():
             on_change=on_sidebar_key_change
         )
 
-        # 🧠 AI 모델 선택 (기본값 gpt-4o 최신 규격 지원)
+        # 🧠 AI 모델 선택 (GPT-5.5 이상 모델 규격만 제공)
         model_options = [
-            "gpt-4o",
-            "gpt-4o-mini",
             "gpt-5.5",
+            "gpt-5.5-turbo",
+            "gpt-5.6",
             "gpt-5.6-sol",
             "gpt-5.6-luna",
             "gpt-5.6-terra",
-            "gpt-5",
-            "gpt-5-mini"
+            "gpt-6.0"
         ]
-        curr_model = st.session_state.get("selected_model", "gpt-4o")
-        model_idx = model_options.index(curr_model) if curr_model in model_options else 0
+        curr_model = st.session_state.get("selected_model", "gpt-5.5")
+        if curr_model not in model_options:
+            curr_model = model_options[0]
+            st.session_state.selected_model = curr_model
+        model_idx = model_options.index(curr_model)
         st.session_state.selected_model = st.selectbox(
-            "🧠 AI 모델 선택",
+            "🧠 AI 모델 선택 (GPT-5.5+)",
             options=model_options,
             index=model_idx,
-            help="안정적인 동작을 위해 기본 모델은 gpt-4o로 설정되어 있습니다."
+            help="GPT-5.5 이상의 최신 모델 목록입니다."
         )
 
         # 🎭 시스템 프롬프트 설정
@@ -358,7 +360,7 @@ def show_chat_page():
 
         # OpenAI 클라이언트 호출 및 스트리밍 답변 렌더링
         client = OpenAI(api_key=current_api_key)
-        selected_model = st.session_state.get("selected_model", "gpt-4o")
+        selected_model = st.session_state.get("selected_model", "gpt-5.5")
 
         try:
             with st.chat_message("assistant"):
@@ -379,7 +381,7 @@ def show_chat_page():
         except Exception as err:
             st.error(f"❌ OpenAI API 호출 오류: {err}")
             if "does not exist" in str(err) or "model_not_found" in str(err):
-                st.info("💡 사이드바에서 현재 사용 가능한 정식 모델(예: gpt-4o, gpt-4o-mini)을 선택해주세요.")
+                st.info(f"💡 선택하신 모델(`{selected_model}`)에 대한 OpenAI API 접근 권한 또는 모델 지원 여부를 확인해주세요.")
 
         # 완료 후 화면 갱신
         st.rerun()
