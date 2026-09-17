@@ -25,3 +25,4 @@ chat_history.db
 .vscode/
 .idea/
 .DS_Store
+notion_content.md

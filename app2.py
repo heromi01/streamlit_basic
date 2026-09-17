@@ -1,7 +1,6 @@
 import streamlit as st
 from openai import OpenAI
 import os
-import base64
 import uuid
 from dotenv import load_dotenv
 import chat_db
@@ -14,133 +13,282 @@ from styles import apply_custom_css
 load_dotenv()
 
 # ========================================================
-# 1. 팝업 모달 다이얼로그 (@st.dialog) 함수 선언
+# 1. 페이지 기본 환경 설정
 # ========================================================
-@st.dialog("🖼️ 이미지 파일 첨부")
-def open_image_upload_dialog():
-    """이미지 파일 전용 팝업 모달"""
-    st.markdown("분석할 이미지 파일을 드래그 앤 드롭하거나 파일 찾기를 클릭하세요.")
-    uploaded_images = st.file_uploader(
-        "이미지 선택 (PNG, JPG, JPEG, WEBP)",
-        type=["png", "jpg", "jpeg", "webp"],
-        accept_multiple_files=True,
-        key="modal_image_uploader"
-    )
-
-    if uploaded_images:
-        st.caption(f"선택된 이미지: **{len(uploaded_images)}개**")
-        preview_cols = st.columns(min(len(uploaded_images), 3))
-        for idx, img in enumerate(uploaded_images):
-            with preview_cols[idx % 3]:
-                st.image(img, caption=img.name, use_container_width=True)
-
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
-        if st.button("✅ 첨부 완료", type="primary", use_container_width=True, key="btn_confirm_images"):
-            if uploaded_images:
-                for img in uploaded_images:
-                    b64 = base64.b64encode(img.getvalue()).decode("utf-8")
-                    ext = img.name.split(".")[-1].lower()
-                    mime = "image/jpeg" if ext in ["jpg", "jpeg"] else f"image/{ext}"
-                    st.session_state.pending_images.append({
-                        "name": img.name,
-                        "b64": b64,
-                        "mime": mime
-                    })
-            st.rerun()
-    with btn_col2:
-        if st.button("닫기", use_container_width=True, key="btn_close_image_modal"):
-            st.rerun()
-
-
-@st.dialog("📄 문서 파일 첨부")
-def open_file_upload_dialog():
-    """문서 파일 전용 팝업 모달"""
-    st.markdown("분석할 텍스트 기반 문서 파일을 드래그 앤 드롭하세요.")
-    uploaded_docs = st.file_uploader(
-        "문서 선택 (TXT, CSV, MD, PY, JSON)",
-        type=["txt", "csv", "md", "py", "json"],
-        accept_multiple_files=True,
-        key="modal_file_uploader"
-    )
-
-    if uploaded_docs:
-        for doc in uploaded_docs:
-            st.caption(f"📄 {doc.name} ({doc.size:,} bytes)")
-
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
-        if st.button("✅ 첨부 완료", type="primary", use_container_width=True, key="btn_confirm_files"):
-            if uploaded_docs:
-                for doc in uploaded_docs:
-                    raw_bytes = doc.getvalue()
-                    try:
-                        text_content = raw_bytes.decode("utf-8")
-                    except Exception:
-                        text_content = raw_bytes.decode("cp949", errors="replace")
-                    st.session_state.pending_files.append({
-                        "name": doc.name,
-                        "content": text_content
-                    })
-            st.rerun()
-    with btn_col2:
-        if st.button("닫기", use_container_width=True, key="btn_close_file_modal"):
-            st.rerun()
-
+st.set_page_config(
+    page_title="OpenAI 텍스트 전용 스마트 챗봇",
+    page_icon="🤖",
+    layout="wide"
+)
+apply_custom_css()
 
 # ========================================================
-# 2. 실시간 AI 채팅 화면 구현 함수
+# 2. 세션 상태(st.session_state) 초기화
 # ========================================================
-def show_chat_page():
-    """실시간 AI 멀티모달 채팅 화면"""
-    apply_custom_css()
+# 로그인 여부 기본값 (미인증 상태)
+if "is_logged_in" not in st.session_state:
+    st.session_state.is_logged_in = False
 
-    # 1. 세련된 상단 브랜딩 헤더
-    st.markdown(
-        """
-        <div class="app-brand-header">
-            <div>
-                <h2 style="margin: 0; font-weight: 700; letter-spacing: -0.02em;">🤖 AI 멀티모달 어시스턴트</h2>
-                <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.9rem;">
-                    OpenAI 최신 모델 연동 • SQLite 실시간 대화 보관 • Vision 멀티모달 분석
-                </p>
-            </div>
-            <div class="brand-pill">
-                <span class="status-dot"></span>
-                <span>Active Model</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+# 로그인한 사용자 ID
+if "login_user" not in st.session_state:
+    st.session_state.login_user = ""
 
-    # 2. 세션 상태 초기화
-    if "current_session_id" not in st.session_state:
+# 화면 이동 메뉴 기본값
+if "current_menu" not in st.session_state:
+    st.session_state.current_menu = "💬 실시간 AI 채팅"
+
+# 현재 대화 세션 ID 초기화
+if "current_session_id" not in st.session_state:
+    # 기존 저장된 세션이 있으면 가장 최신 세션을 불러오고, 없으면 신규 생성
+    existing_sessions = chat_db.get_all_sessions()
+    if existing_sessions:
+        st.session_state.current_session_id = existing_sessions[0]["id"]
+    else:
         new_sid = str(uuid.uuid4())
         chat_db.create_session(new_sid, "새로운 대화")
         st.session_state.current_session_id = new_sid
 
-    if "pending_images" not in st.session_state:
-        st.session_state.pending_images = []
+# API Key 세션 상태 (기본값으로 .env의 키가 있으면 등록)
+if "api_key" not in st.session_state:
+    st.session_state.api_key = os.getenv("OPENAI_API_KEY", "")
 
-    if "pending_files" not in st.session_state:
-        st.session_state.pending_files = []
 
-    # 3. 사이드바: 챗봇 설정 및 세션 관리 (중복 버튼 제거 및 일원화)
-    with st.sidebar:
-        st.markdown("### ⚙️ 모델 & 환경 설정")
+# ========================================================
+# 3. 로그인 화면 (보안 취약성 안내문 포함)
+# ========================================================
+def show_login_page():
+    """로그인 폼 및 보안 취약성 상세 안내 화면"""
+    st.title("🔐 OpenAI 챗봇 시스템 로그인")
+    st.markdown("대화형 AI 서비스를 이용하기 위해 로그인을 진행해주세요.")
 
-        env_api_key = os.getenv("OPENAI_API_KEY", "")
-        api_key = st.text_input(
-            "OpenAI API Key",
-            value=env_api_key,
+    # ⚠️ 보안 취약성 안내문 (Security Disclaimer)
+    st.warning("""
+    ### ⚠️ 보안 취약성 및 주의사항 안내 (Security Disclaimer)
+    본 애플리케이션의 로그인 기능은 **Streamlit 세션 상태(`st.session_state`) 기반의 실습 및 프로토타입용 데모 인증**입니다.
+    
+    1. **단방향 암호화 해싱(Bcrypt, Argon2 등) 부재**: 입력된 비밀번호가 DB에 안전하게 해싱되지 않고 단순 세션 메모리에 보관됩니다.
+    2. **HTTPS 및 전송 구간 보안 미보장**: 로컬 또는 기본 HTTP 통신 시 패킷 스니핑 및 세션 하이재킹 위험이 있습니다.
+    3. **새로고침 시 세션 휘발**: 브라우저 새로고침이나 탭 종료 시 세션 상태가 초기화될 수 있습니다.
+    4. **🚨 실제 운영 환경(Production) 절대 사용 금지**: 실무 환경 배포 시에는 반드시 OAuth2.0(Google, GitHub 등), Supabase Auth, Firebase Auth 등 검증된 보안 인증 인프라를 적용하십시오.
+    """)
+
+    st.write("")
+
+    # 로그인 입력 폼 카드
+    with st.container(border=True):
+        st.subheader("데모 계정 로그인")
+        st.caption("💡 테스트용 기본 계정: 아이디 `admin` / 비밀번호 `1234` (임의의 값을 입력하셔도 실습 가능합니다)")
+        
+        login_col1, login_col2 = st.columns(2)
+        with login_col1:
+            input_id = st.text_input("👤 아이디 (ID)", placeholder="admin", key="input_user_id")
+        with login_col2:
+            input_pw = st.text_input("🔑 비밀번호 (Password)", type="password", placeholder="1234", key="input_user_pw")
+
+        btn_login = st.button("🚀 로그인 및 챗봇 시작하기", type="primary", use_container_width=True)
+
+        if btn_login:
+            if not input_id.strip() or not input_pw.strip():
+                st.error("아이디와 비밀번호를 모두 입력해주세요.")
+            else:
+                # 데모 로그인 성공 처리
+                st.session_state.is_logged_in = True
+                st.session_state.login_user = input_id.strip()
+                st.success(f"🎉 환영합니다, **{input_id}**님! 챗봇 화면으로 이동합니다.")
+                st.rerun()
+
+
+# ========================================================
+# 4. 실시간 텍스트 전용 AI 채팅 화면
+# ========================================================
+def show_chat_page():
+    """실시간 텍스트 전용 AI 채팅 화면"""
+
+    # 1. 상단 타이틀 및 소개
+    st.title("🤖 OpenAI 텍스트 전용 스마트 챗봇")
+    st.markdown("최신 OpenAI 모델을 활용한 **실시간 텍스트 대화** 공간입니다. (SQLite 영구 보관 & 세션당 100턴 제한)")
+    st.caption("💡 불필요한 첨부 요소를 배제하고 대화 본문에 집중한 심플하고 빠른 챗봇입니다.")
+
+    # 과거 대화 히스토리 화면 전환 버튼
+    col_top1, col_top2 = st.columns([1, 4])
+    with col_top1:
+        if st.button("📜 과거 대화 내역 전체보기", type="secondary", use_container_width=True):
+            st.session_state.current_menu = "📜 과거 대화 히스토리"
+            st.rerun()
+
+    st.divider()
+
+    # 2. 현재 세션 대화 턴 수 및 제한 상태 확인
+    # 1턴 = 사용자 질문 1개 + AI 답변 1개
+    current_sid = st.session_state.current_session_id
+    turn_count = chat_db.get_session_turn_count(current_sid)
+    is_limit_reached = chat_db.is_turn_limit_reached(current_sid, max_turns=chat_db.MAX_TURNS_PER_SESSION)
+
+    # 3. 현재 세션 상단 정보 카드 (디자인 리뉴얼)
+    with st.container(border=True):
+        info_col1, info_col2, info_col3 = st.columns([3, 2, 2])
+        with info_col1:
+            # 현재 세션 제목 조회
+            sessions = chat_db.get_all_sessions()
+            curr_title = next((s["title"] for s in sessions if s["id"] == current_sid), "새로운 대화")
+            st.markdown(f"📌 **현재 세션**: `{curr_title}`")
+        with info_col2:
+            # 대화 턴 수 진행 상황 표시
+            turn_color = "red" if is_limit_reached else "green"
+            st.markdown(f"💬 **대화 진행도**: :{turn_color}[{turn_count} / {chat_db.MAX_TURNS_PER_SESSION} 턴]")
+        with info_col3:
+            # API Key 등록 상태 표시
+            if st.session_state.api_key.strip():
+                st.markdown("🔑 **API Key**: :green[등록 완료 🟢]")
+            else:
+                st.markdown("🔑 **API Key**: :red[미등록 🔴]")
+
+    # 4. API Key 등록 여부 검증 (Key가 없으면 채팅 불가 차단)
+    current_api_key = st.session_state.api_key.strip()
+
+    if not current_api_key:
+        st.warning("""
+        ### 🔑 OpenAI API Key 등록이 필요합니다!
+        본 챗봇은 **OpenAI API Key가 등록되어야만 동작**하도록 설정되어 있습니다.  
+        아래 입력창 또는 **좌측 사이드바**에서 API Key(`sk-...`)를 등록해주세요.
+        """)
+        
+        # 메인 화면 즉시 등록 입력창
+        quick_key = st.text_input(
+            "OpenAI API Key 입력",
             type="password",
-            placeholder="sk-...",
-            help=".env 파일에 등록된 키가 기본 연동됩니다."
+            placeholder="sk-proj-...",
+            help="입력한 키는 현재 세션에만 임시 보관되며 서버에 영구 저장되지 않습니다."
+        )
+        if st.button("✅ API Key 등록하고 대화 시작하기", type="primary"):
+            if quick_key.strip():
+                st.session_state.api_key = quick_key.strip()
+                st.success("API Key가 성공적으로 등록되었습니다!")
+                st.rerun()
+            else:
+                st.error("유효한 API Key를 입력해주세요.")
+        
+        # 키가 등록되지 않았으므로 채팅 입력창 노출 중단
+        return
+
+    # 5. 세션당 100턴 도달 여부 알림
+    if is_limit_reached:
+        st.error(f"""
+        ⚠️ **본 세션의 최대 대화 수({chat_db.MAX_TURNS_PER_SESSION}턴)에 도달했습니다.**  
+        대화 품질과 시스템 자원 관리를 위해 더 이상의 메시지를 보낼 수 없습니다.  
+        새로운 질문을 계속하시려면 사이드바의 **'➕ 새 대화 시작'** 버튼을 클릭해주세요!
+        """)
+
+    # 6. 이전 대화 메시지 출력
+    current_messages = chat_db.get_session_messages(current_sid)
+    for msg in current_messages:
+        with st.chat_message(msg["role"]):
+            role_label = "👤 사용자" if msg["role"] == "user" else "🤖 AI 어시스턴트"
+            st.caption(f"{role_label} • {msg['created_at']}")
+            st.markdown(msg["content"])
+
+    # 7. 하단 채팅 입력창 (100턴 초과 시 비활성화)
+    chat_disabled = is_limit_reached
+    user_prompt = st.chat_input(
+        "AI에게 보낼 메시지를 입력하세요..." if not chat_disabled else "최대 100턴에 도달하여 입력이 제한되었습니다.",
+        disabled=chat_disabled
+    )
+
+    # 8. 사용자 입력 처리 및 OpenAI 응답 스트리밍
+    if user_prompt:
+        # 사용자 메시지 화면 출력
+        with st.chat_message("user"):
+            st.caption("👤 사용자 • 방금 전")
+            st.markdown(user_prompt)
+
+        # 사용자 메시지 SQLite 저장
+        chat_db.save_message(
+            session_id=current_sid,
+            role="user",
+            content=user_prompt
         )
 
-        model_name = st.selectbox(
-            "AI 모델 선택",
+        # 첫 질문인 경우 세션 제목을 질문 요약으로 자동 갱신
+        if len(current_messages) == 0:
+            short_title = user_prompt[:25] + ("..." if len(user_prompt) > 25 else "")
+            chat_db.update_session_title(current_sid, short_title)
+
+        # 순수 텍스트 OpenAI 대화 페이로드 구성
+        api_messages = [
+            {"role": "system", "content": st.session_state.get("system_prompt", "당신은 친절하고 명확한 답변을 제공하는 지적인 AI 어시스턴트입니다.")}
+        ]
+        for prev in current_messages:
+            api_messages.append({"role": prev["role"], "content": prev["content"]})
+        api_messages.append({"role": "user", "content": user_prompt})
+
+        # OpenAI 클라이언트 호출 및 스트리밍 답변 렌더링
+        client = OpenAI(api_key=current_api_key)
+        selected_model = st.session_state.get("selected_model", "gpt-5.5")
+
+        with st.chat_message("assistant"):
+            st.caption("🤖 AI 어시스턴트 • 응답 중...")
+            stream = client.chat.completions.create(
+                model=selected_model,
+                messages=api_messages,
+                stream=True
+            )
+            assistant_response = st.write_stream(stream)
+
+        # AI 답변 SQLite 저장
+        chat_db.save_message(
+            session_id=current_sid,
+            role="assistant",
+            content=assistant_response
+        )
+
+        # 완료 후 화면 갱신
+        st.rerun()
+
+
+# ========================================================
+# 5. 메인 실행 흐름 제어 (로그인 여부 및 사이드바 제어)
+# ========================================================
+
+# 1. 로그인되지 않은 경우 로그인 화면 노출
+if not st.session_state.is_logged_in:
+    show_login_page()
+else:
+    # 2. 로그인된 경우 공통 사이드바 설정
+    with st.sidebar:
+        # 사용자 정보 및 로그아웃
+        st.markdown(f"👤 접속자: **{st.session_state.login_user}**님")
+        if st.button("🚪 로그아웃", use_container_width=True):
+            st.session_state.is_logged_in = False
+            st.session_state.login_user = ""
+            st.rerun()
+
+        st.divider()
+
+        # 화면 전환 메뉴
+        st.session_state.current_menu = st.radio(
+            "🧭 화면 이동",
+            ["💬 실시간 AI 채팅", "📜 과거 대화 히스토리"],
+            index=0 if st.session_state.current_menu == "💬 실시간 AI 채팅" else 1
+        )
+
+        st.divider()
+
+        # 🔑 OpenAI API Key 설정
+        st.subheader("🔑 OpenAI API Key")
+        key_input = st.text_input(
+            "API Key 등록/변경",
+            value=st.session_state.api_key,
+            type="password",
+            placeholder="sk-...",
+            help="OpenAI API 키를 입력하면 세션에 즉시 반영됩니다."
+        )
+        if key_input != st.session_state.api_key:
+            st.session_state.api_key = key_input
+            st.rerun()
+
+        # 🧠 AI 모델 선택 (GPT-5.5+ 최신 규격 지원)
+        st.session_state.selected_model = st.selectbox(
+            "🧠 AI 모델 선택 (GPT-5.5+)",
             options=[
                 "gpt-5.5",
                 "gpt-5.6-sol",
@@ -153,49 +301,48 @@ def show_chat_page():
             index=0
         )
 
-        system_instruction = st.text_area(
-            "시스템 역할 지침",
-            value="당신은 친절하고 전문적인 AI 어시스턴트입니다. 사용자의 질문과 첨부된 자료를 꼼꼼하게 검토하고 논리적으로 답변해주세요.",
+        # 🎭 시스템 프롬프트 설정
+        st.session_state.system_prompt = st.text_area(
+            "🎭 AI 역할 지침 (System Prompt)",
+            value=st.session_state.get("system_prompt", "당신은 친절하고 명확한 답변을 제공하는 지적인 AI 어시스턴트입니다."),
             height=70
         )
 
-        st.markdown("---")
-        st.markdown("### 💬 대화 세션")
+        st.divider()
+
+        # 🗄️ 세션 관리 (최대 10개 유지)
+        st.subheader("🗄️ 대화 세션 관리")
+        st.caption("💡 DB에 최대 10개 세션만 보관되며, 초과 시 오래된 세션부터 자동 삭제됩니다.")
 
         # 새 대화 시작 버튼
-        if st.button("➕ 새 대화 시작", use_container_width=True, type="primary"):
+        if st.button("➕ 새 대화 시작 (New Chat)", use_container_width=True, type="primary"):
             new_sid = str(uuid.uuid4())
             chat_db.create_session(new_sid, "새로운 대화")
             st.session_state.current_session_id = new_sid
-            st.session_state.pending_images = []
-            st.session_state.pending_files = []
             st.rerun()
 
-        # 세션 선택 목록
-        saved_sessions = chat_db.get_all_sessions()
-        session_options = {s["id"]: f"{s['title']} ({s['created_at'][:10]})" for s in saved_sessions}
+        # 세션 목록 셀렉트박스
+        all_sessions = chat_db.get_all_sessions()
+        session_map = {s["id"]: f"[{s['created_at'][:10]}] {s['title']}" for s in all_sessions}
 
-        if st.session_state.current_session_id not in session_options:
-            session_options[st.session_state.current_session_id] = "현재 대화 (새로운 대화)"
+        if st.session_state.current_session_id not in session_map:
+            session_map[st.session_state.current_session_id] = "현재 대화 (새로운 대화)"
 
-        session_keys = list(session_options.keys())
-        current_idx = session_keys.index(st.session_state.current_session_id) if st.session_state.current_session_id in session_keys else 0
+        session_id_list = list(session_map.keys())
+        curr_idx = session_id_list.index(st.session_state.current_session_id) if st.session_state.current_session_id in session_id_list else 0
 
         selected_sid = st.selectbox(
-            "세션 목록",
-            options=session_keys,
-            index=current_idx,
-            format_func=lambda x: session_options.get(x, x),
-            label_visibility="collapsed"
+            "보관된 세션 선택 (최대 10개)",
+            options=session_id_list,
+            index=curr_idx,
+            format_func=lambda x: session_map.get(x, x)
         )
 
         if selected_sid != st.session_state.current_session_id:
             st.session_state.current_session_id = selected_sid
-            st.session_state.pending_images = []
-            st.session_state.pending_files = []
             st.rerun()
 
-        # 세션 관리 (삭제)
+        # 현재 대화 세션 삭제 버튼
         if st.button("🗑️ 현재 세션 삭제", use_container_width=True):
             chat_db.delete_session(st.session_state.current_session_id)
             remaining = chat_db.get_all_sessions()
@@ -205,225 +352,10 @@ def show_chat_page():
                 new_sid = str(uuid.uuid4())
                 chat_db.create_session(new_sid, "새로운 대화")
                 st.session_state.current_session_id = new_sid
-            st.session_state.pending_images = []
-            st.session_state.pending_files = []
             st.rerun()
 
-    # 4. 현재 대화 메시지 내역 불러오기
-    current_messages = chat_db.get_session_messages(st.session_state.current_session_id)
-
-    # [미니 세션 현황판] 현재 세션 상태 요약 배지 렌더링 (요구사항 1 적용)
-    short_sid = st.session_state.current_session_id[:8]
-    total_msgs = len(current_messages)
-    pending_img_count = len(st.session_state.pending_images)
-    pending_file_count = len(st.session_state.pending_files)
-
-    st.markdown(
-        f"""
-        <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem; align-items: center;">
-            <span class="chip" style="background: rgba(99, 102, 241, 0.08); font-size: 0.8rem;">
-                🆔 세션: <code>{short_sid}</code>
-            </span>
-            <span class="chip" style="background: rgba(59, 130, 246, 0.08); font-size: 0.8rem;">
-                🧠 모델: <b>{model_name}</b>
-            </span>
-            <span class="chip" style="background: rgba(16, 185, 129, 0.08); font-size: 0.8rem;">
-                💬 대화: <b>{total_msgs}개</b>
-            </span>
-            <span class="chip" style="background: rgba(245, 158, 11, 0.08); font-size: 0.8rem;">
-                📎 첨부 대기: <b>{pending_img_count}장 / {pending_file_count}개</b>
-            </span>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    if not current_messages:
-        with st.container(border=True):
-            st.markdown(
-                """
-                <div style="text-align: center; padding: 1.5rem 1rem;">
-                    <span style="font-size: 2.2rem;">👋</span>
-                    <h3 style="margin: 0.5rem 0 0.25rem 0;">무엇을 도와드릴까요?</h3>
-                    <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 0;">
-                        텍스트 질문을 입력하거나, 아래 툴바에서 이미지 및 문서 파일을 첨부해 분석을 요청해보세요.
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-    else:
-        for msg in current_messages:
-            with st.chat_message(msg["role"]):
-                if msg.get("images"):
-                    img_cols = st.columns(min(len(msg["images"]), 3))
-                    for idx, img_b64 in enumerate(msg["images"]):
-                        with img_cols[idx % 3]:
-                            st.image(base64.b64decode(img_b64), caption="첨부 이미지", use_container_width=True)
-
-                if msg.get("files"):
-                    file_badges = " ".join([f"`📄 {f}`" for f in msg["files"]])
-                    st.markdown(f"📎 {file_badges}")
-
-                st.markdown(msg["content"])
-
-    # 5. 전송 대기 중인 첨부 항목 카드 (컴팩트 칩 스타일)
-    has_pending = bool(st.session_state.pending_images or st.session_state.pending_files)
-    if has_pending:
-        with st.container(border=True):
-            top_col, cancel_col = st.columns([5, 1])
-            with top_col:
-                st.markdown("**📎 전송 대기 중인 첨부 항목**")
-            with cancel_col:
-                if st.button("취소", use_container_width=True, key="btn_cancel_pending"):
-                    st.session_state.pending_images = []
-                    st.session_state.pending_files = []
-                    st.rerun()
-
-            if st.session_state.pending_images:
-                cols = st.columns(min(len(st.session_state.pending_images), 4))
-                for i, p_img in enumerate(st.session_state.pending_images):
-                    with cols[i % 4]:
-                        st.image(base64.b64decode(p_img["b64"]), caption=p_img["name"], width=110)
-
-            if st.session_state.pending_files:
-                file_chips = "".join([f"<span class='chip'>📄 {pf['name']}</span>" for pf in st.session_state.pending_files])
-                st.markdown(f"<div class='chip-container'>{file_chips}</div>", unsafe_allow_html=True)
-
-    # 6. 컴팩트 퀵 첨부 툴바
-    st.write("")
-    attach_col1, attach_col2, attach_space = st.columns([1.2, 1.2, 5])
-    with attach_col1:
-        if st.button("🖼️ 이미지 첨부", use_container_width=True, key="quick_img_btn"):
-            open_image_upload_dialog()
-    with attach_col2:
-        if st.button("📄 문서 첨부", use_container_width=True, key="quick_doc_btn"):
-            open_file_upload_dialog()
-
-    # 7. 하단 채팅 입력창
-    user_prompt = st.chat_input("메시지를 입력하세요...")
-
-    direct_send = False
-    if has_pending and not user_prompt:
-        direct_send = st.button("🚀 첨부 항목만으로 분석 요청", type="secondary")
-
-    # 8. 메시지 전송 및 OpenAI 응답 처리
-    if user_prompt or direct_send:
-        if not api_key:
-            st.warning("⚠️ OpenAI API Key가 필요합니다. 사이드바 설정을 확인해주세요.")
-        else:
-            actual_prompt = user_prompt if user_prompt else "(첨부된 파일 및 이미지 분석을 요청합니다)"
-
-            full_user_content = actual_prompt
-            attached_filenames = []
-            for pf in st.session_state.pending_files:
-                full_user_content += f"\n\n[첨부 문서: {pf['name']}]\n```\n{pf['content']}\n```"
-                attached_filenames.append(pf['name'])
-
-            attached_images_b64 = [p_img["b64"] for p_img in st.session_state.pending_images]
-            for p_img in st.session_state.pending_images:
-                attached_filenames.append(f"🖼️ {p_img['name']}")
-
-            # 사용자 메시지 렌더링
-            with st.chat_message("user"):
-                if attached_images_b64:
-                    cols = st.columns(min(len(attached_images_b64), 3))
-                    for i, img_b64 in enumerate(attached_images_b64):
-                        with cols[i % 3]:
-                            st.image(base64.b64decode(img_b64), caption="첨부 이미지", use_container_width=True)
-                if attached_filenames:
-                    file_badges = " ".join([f"`{f}`" for f in attached_filenames])
-                    st.markdown(f"📎 {file_badges}")
-                st.markdown(actual_prompt)
-
-            # DB 저장
-            chat_db.save_message(
-                session_id=st.session_state.current_session_id,
-                role="user",
-                content=actual_prompt,
-                images=attached_images_b64,
-                files=attached_filenames
-            )
-
-            # 세션 제목 자동 업데이트
-            if len(current_messages) == 0:
-                short_title = actual_prompt[:25] + ("..." if len(actual_prompt) > 25 else "")
-                chat_db.update_session_title(st.session_state.current_session_id, short_title)
-
-            # API 메시지 포맷 구성
-            api_messages = [{"role": "system", "content": system_instruction}]
-            for prev in current_messages:
-                if prev["role"] == "user":
-                    if prev.get("images"):
-                        payload = [{"type": "text", "text": prev["content"]}]
-                        for b64_str in prev["images"]:
-                            payload.append({
-                                "type": "image_url",
-                                "image_url": {"url": f"data:image/png;base64,{b64_str}"}
-                            })
-                        api_messages.append({"role": "user", "content": payload})
-                    else:
-                        api_messages.append({"role": "user", "content": prev["content"]})
-                else:
-                    api_messages.append({"role": "assistant", "content": prev["content"]})
-
-            if attached_images_b64:
-                current_payload = [{"type": "text", "text": full_user_content}]
-                for p_img in st.session_state.pending_images:
-                    current_payload.append({
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{p_img['mime']};base64,{p_img['b64']}"}
-                    })
-                api_messages.append({"role": "user", "content": current_payload})
-            else:
-                api_messages.append({"role": "user", "content": full_user_content})
-
-            # 스트리밍 생성
-            client = OpenAI(api_key=api_key)
-            with st.chat_message("assistant"):
-                stream = client.chat.completions.create(
-                    model=model_name,
-                    messages=api_messages,
-                    stream=True
-                )
-                assistant_response = st.write_stream(stream)
-
-            # AI 응답 저장
-            chat_db.save_message(
-                session_id=st.session_state.current_session_id,
-                role="assistant",
-                content=assistant_response
-            )
-
-            st.session_state.pending_images = []
-            st.session_state.pending_files = []
-            st.rerun()
-
-
-# ========================================================
-# 3. 독립 실행 지원
-# ========================================================
-if __name__ == "__main__":
-    st.set_page_config(
-        page_title="AI 멀티모달 어시스턴트",
-        page_icon="🤖",
-        layout="wide"
-    )
-
-    if "current_menu" not in st.session_state:
-        st.session_state["current_menu"] = "💬 실시간 AI 채팅"
-
-    from admin_analytics import show_admin_analytics_page
-
-    menu = st.sidebar.radio(
-        "🧭 메뉴",
-        ["💬 실시간 AI 채팅", "📜 과거 대화 히스토리", "📈 관리자 통계 분석실"],
-        key="current_menu"
-    )
-
-    if menu == "💬 실시간 AI 채팅":
+    # 3. 화면 분기 렌더링
+    if st.session_state.current_menu == "💬 실시간 AI 채팅":
         show_chat_page()
-    elif menu == "📜 과거 대화 히스토리":
-        show_history_page()
     else:
-        show_admin_analytics_page()
+        show_history_page()
