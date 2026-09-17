@@ -13,13 +13,17 @@ from styles import apply_custom_css
 load_dotenv()
 
 # ========================================================
-# 1. 페이지 기본 환경 설정
+# 1. 페이지 기본 환경 설정 (중복 호출 방지)
 # ========================================================
-st.set_page_config(
-    page_title="OpenAI 텍스트 전용 스마트 챗봇",
-    page_icon="🤖",
-    layout="wide"
-)
+try:
+    st.set_page_config(
+        page_title="OpenAI 텍스트 전용 스마트 챗봇",
+        page_icon="🤖",
+        layout="wide"
+    )
+except Exception:
+    pass
+
 apply_custom_css()
 
 # ========================================================
@@ -39,7 +43,6 @@ if "current_menu" not in st.session_state:
 
 # 현재 대화 세션 ID 초기화
 if "current_session_id" not in st.session_state:
-    # 기존 저장된 세션이 있으면 가장 최신 세션을 불러오고, 없으면 신규 생성
     existing_sessions = chat_db.get_all_sessions()
     if existing_sessions:
         st.session_state.current_session_id = existing_sessions[0]["id"]
@@ -48,9 +51,17 @@ if "current_session_id" not in st.session_state:
         chat_db.create_session(new_sid, "새로운 대화")
         st.session_state.current_session_id = new_sid
 
-# API Key 세션 상태 (기본값으로 .env의 키가 있으면 등록)
+# API Key 세션 상태
 if "api_key" not in st.session_state:
     st.session_state.api_key = os.getenv("OPENAI_API_KEY", "")
+
+# AI 모델 기본값 설정 (안정적으로 동작하는 gpt-4o 기본)
+if "selected_model" not in st.session_state:
+    st.session_state.selected_model = "gpt-4o"
+
+# 시스템 프롬프트 기본값
+if "system_prompt" not in st.session_state:
+    st.session_state.system_prompt = "당신은 친절하고 명확한 답변을 제공하는 지적인 AI 어시스턴트입니다."
 
 
 # ========================================================
@@ -91,7 +102,6 @@ def show_login_page():
             if not input_id.strip() or not input_pw.strip():
                 st.error("아이디와 비밀번호를 모두 입력해주세요.")
             else:
-                # 데모 로그인 성공 처리
                 st.session_state.is_logged_in = True
                 st.session_state.login_user = input_id.strip()
                 st.success(f"🎉 환영합니다, **{input_id}**님! 챗봇 화면으로 이동합니다.")
@@ -99,10 +109,141 @@ def show_login_page():
 
 
 # ========================================================
-# 4. 실시간 텍스트 전용 AI 채팅 화면
+# 4. 사이드바 설정 및 세션 관리 렌더링
+# ========================================================
+def render_chat_sidebar():
+    """사이드바 설정 패널 (접속 정보, API Key, 모델 선택, 세션 관리)"""
+    with st.sidebar:
+        st.markdown(f"👤 접속자: **{st.session_state.login_user or '게스트'}**님")
+        if st.button("🚪 로그아웃", use_container_width=True):
+            st.session_state.is_logged_in = False
+            st.session_state.login_user = ""
+            st.rerun()
+
+        st.divider()
+
+        # 화면 전환 메뉴 (단독 실행 모드일 때 라디오 노출)
+        if st.session_state.current_menu in ["💬 실시간 AI 채팅", "📜 과거 대화 히스토리"]:
+            nav_choice = st.radio(
+                "🧭 화면 이동",
+                ["💬 실시간 AI 채팅", "📜 과거 대화 히스토리"],
+                index=0 if st.session_state.current_menu == "💬 실시간 AI 채팅" else 1,
+                key="sidebar_nav_radio"
+            )
+            if nav_choice != st.session_state.current_menu:
+                st.session_state.current_menu = nav_choice
+                st.rerun()
+            st.divider()
+
+        # 🔑 OpenAI API Key 설정
+        st.subheader("🔑 OpenAI API Key")
+        def on_sidebar_key_change():
+            st.session_state.api_key = st.session_state.sidebar_api_key_input.strip()
+
+        st.text_input(
+            "API Key 등록/변경",
+            value=st.session_state.api_key,
+            type="password",
+            placeholder="sk-...",
+            help="OpenAI API 키를 입력하면 세션에 즉시 반영됩니다.",
+            key="sidebar_api_key_input",
+            on_change=on_sidebar_key_change
+        )
+
+        # 🧠 AI 모델 선택 (기본값 gpt-4o 최신 규격 지원)
+        model_options = [
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-5.5",
+            "gpt-5.6-sol",
+            "gpt-5.6-luna",
+            "gpt-5.6-terra",
+            "gpt-5",
+            "gpt-5-mini"
+        ]
+        curr_model = st.session_state.get("selected_model", "gpt-4o")
+        model_idx = model_options.index(curr_model) if curr_model in model_options else 0
+        st.session_state.selected_model = st.selectbox(
+            "🧠 AI 모델 선택",
+            options=model_options,
+            index=model_idx,
+            help="안정적인 동작을 위해 기본 모델은 gpt-4o로 설정되어 있습니다."
+        )
+
+        # 🎭 시스템 프롬프트 설정
+        st.session_state.system_prompt = st.text_area(
+            "🎭 AI 역할 지침 (System Prompt)",
+            value=st.session_state.get("system_prompt", "당신은 친절하고 명확한 답변을 제공하는 지적인 AI 어시스턴트입니다."),
+            height=70
+        )
+
+        st.divider()
+
+        # 🗄️ 세션 관리 (최대 10개 유지)
+        st.subheader("🗄️ 대화 세션 관리")
+        st.caption("💡 DB에 최대 10개 세션만 보관되며, 초과 시 오래된 세션부터 자동 삭제됩니다.")
+
+        # 새 대화 시작 버튼
+        if st.button("➕ 새 대화 시작 (New Chat)", use_container_width=True, type="primary"):
+            new_sid = str(uuid.uuid4())
+            chat_db.create_session(new_sid, "새로운 대화")
+            st.session_state.current_session_id = new_sid
+            st.rerun()
+
+        # 세션 목록 준비
+        all_sessions = chat_db.get_all_sessions()
+        session_ids = [s["id"] for s in all_sessions]
+        if st.session_state.current_session_id not in session_ids:
+            if session_ids:
+                st.session_state.current_session_id = session_ids[0]
+            else:
+                new_sid = str(uuid.uuid4())
+                chat_db.create_session(new_sid, "새로운 대화")
+                st.session_state.current_session_id = new_sid
+                all_sessions = chat_db.get_all_sessions()
+                session_ids = [s["id"] for s in all_sessions]
+
+        session_map = {s["id"]: f"[{s['created_at'][:10]}] {s['title']}" for s in all_sessions}
+        curr_idx = session_ids.index(st.session_state.current_session_id) if st.session_state.current_session_id in session_ids else 0
+
+        def on_session_select_change():
+            st.session_state.current_session_id = st.session_state.session_selector_widget
+
+        st.selectbox(
+            "보관된 세션 선택 (최대 10개)",
+            options=session_ids,
+            index=curr_idx,
+            format_func=lambda sid: session_map.get(sid, sid),
+            key="session_selector_widget",
+            on_change=on_session_select_change
+        )
+
+        # 현재 대화 세션 삭제 버튼
+        if st.button("🗑️ 현재 세션 삭제", use_container_width=True):
+            chat_db.delete_session(st.session_state.current_session_id)
+            remaining = chat_db.get_all_sessions()
+            if remaining:
+                st.session_state.current_session_id = remaining[0]["id"]
+            else:
+                new_sid = str(uuid.uuid4())
+                chat_db.create_session(new_sid, "새로운 대화")
+                st.session_state.current_session_id = new_sid
+            st.rerun()
+
+
+# ========================================================
+# 5. 실시간 텍스트 전용 AI 채팅 화면
 # ========================================================
 def show_chat_page():
     """실시간 텍스트 전용 AI 채팅 화면"""
+
+    # 미로그인 상태라면 로그인 화면 렌더링 후 중단
+    if not st.session_state.get("is_logged_in", False):
+        show_login_page()
+        return
+
+    # 사이드바 렌더링
+    render_chat_sidebar()
 
     # 1. 상단 타이틀 및 소개
     st.title("🤖 OpenAI 텍스트 전용 스마트 챗봇")
@@ -119,7 +260,6 @@ def show_chat_page():
     st.divider()
 
     # 2. 현재 세션 대화 턴 수 및 제한 상태 확인
-    # 1턴 = 사용자 질문 1개 + AI 답변 1개
     current_sid = st.session_state.current_session_id
     turn_count = chat_db.get_session_turn_count(current_sid)
     is_limit_reached = chat_db.is_turn_limit_reached(current_sid, max_turns=chat_db.MAX_TURNS_PER_SESSION)
@@ -128,16 +268,13 @@ def show_chat_page():
     with st.container(border=True):
         info_col1, info_col2, info_col3 = st.columns([3, 2, 2])
         with info_col1:
-            # 현재 세션 제목 조회
             sessions = chat_db.get_all_sessions()
             curr_title = next((s["title"] for s in sessions if s["id"] == current_sid), "새로운 대화")
             st.markdown(f"📌 **현재 세션**: `{curr_title}`")
         with info_col2:
-            # 대화 턴 수 진행 상황 표시
             turn_color = "red" if is_limit_reached else "green"
             st.markdown(f"💬 **대화 진행도**: :{turn_color}[{turn_count} / {chat_db.MAX_TURNS_PER_SESSION} 턴]")
         with info_col3:
-            # API Key 등록 상태 표시
             if st.session_state.api_key.strip():
                 st.markdown("🔑 **API Key**: :green[등록 완료 🟢]")
             else:
@@ -153,7 +290,6 @@ def show_chat_page():
         아래 입력창 또는 **좌측 사이드바**에서 API Key(`sk-...`)를 등록해주세요.
         """)
         
-        # 메인 화면 즉시 등록 입력창
         quick_key = st.text_input(
             "OpenAI API Key 입력",
             type="password",
@@ -167,8 +303,6 @@ def show_chat_page():
                 st.rerun()
             else:
                 st.error("유효한 API Key를 입력해주세요.")
-        
-        # 키가 등록되지 않았으므로 채팅 입력창 노출 중단
         return
 
     # 5. 세션당 100턴 도달 여부 알림
@@ -191,7 +325,8 @@ def show_chat_page():
     chat_disabled = is_limit_reached
     user_prompt = st.chat_input(
         "AI에게 보낼 메시지를 입력하세요..." if not chat_disabled else "최대 100턴에 도달하여 입력이 제한되었습니다.",
-        disabled=chat_disabled
+        disabled=chat_disabled,
+        key="chat_input_prompt"
     )
 
     # 8. 사용자 입력 처리 및 OpenAI 응답 스트리밍
@@ -223,139 +358,41 @@ def show_chat_page():
 
         # OpenAI 클라이언트 호출 및 스트리밍 답변 렌더링
         client = OpenAI(api_key=current_api_key)
-        selected_model = st.session_state.get("selected_model", "gpt-5.5")
+        selected_model = st.session_state.get("selected_model", "gpt-4o")
 
-        with st.chat_message("assistant"):
-            st.caption("🤖 AI 어시스턴트 • 응답 중...")
-            stream = client.chat.completions.create(
-                model=selected_model,
-                messages=api_messages,
-                stream=True
+        try:
+            with st.chat_message("assistant"):
+                st.caption("🤖 AI 어시스턴트 • 응답 중...")
+                stream = client.chat.completions.create(
+                    model=selected_model,
+                    messages=api_messages,
+                    stream=True
+                )
+                assistant_response = st.write_stream(stream)
+
+            # AI 답변 SQLite 저장
+            chat_db.save_message(
+                session_id=current_sid,
+                role="assistant",
+                content=assistant_response
             )
-            assistant_response = st.write_stream(stream)
-
-        # AI 답변 SQLite 저장
-        chat_db.save_message(
-            session_id=current_sid,
-            role="assistant",
-            content=assistant_response
-        )
+        except Exception as err:
+            st.error(f"❌ OpenAI API 호출 오류: {err}")
+            if "does not exist" in str(err) or "model_not_found" in str(err):
+                st.info("💡 사이드바에서 현재 사용 가능한 정식 모델(예: gpt-4o, gpt-4o-mini)을 선택해주세요.")
 
         # 완료 후 화면 갱신
         st.rerun()
 
 
 # ========================================================
-# 5. 메인 실행 흐름 제어 (로그인 여부 및 사이드바 제어)
+# 6. app2.py 단독 실행 시 진입점
 # ========================================================
-
-# 1. 로그인되지 않은 경우 로그인 화면 노출
-if not st.session_state.is_logged_in:
-    show_login_page()
-else:
-    # 2. 로그인된 경우 공통 사이드바 설정
-    with st.sidebar:
-        # 사용자 정보 및 로그아웃
-        st.markdown(f"👤 접속자: **{st.session_state.login_user}**님")
-        if st.button("🚪 로그아웃", use_container_width=True):
-            st.session_state.is_logged_in = False
-            st.session_state.login_user = ""
-            st.rerun()
-
-        st.divider()
-
-        # 화면 전환 메뉴
-        st.session_state.current_menu = st.radio(
-            "🧭 화면 이동",
-            ["💬 실시간 AI 채팅", "📜 과거 대화 히스토리"],
-            index=0 if st.session_state.current_menu == "💬 실시간 AI 채팅" else 1
-        )
-
-        st.divider()
-
-        # 🔑 OpenAI API Key 설정
-        st.subheader("🔑 OpenAI API Key")
-        key_input = st.text_input(
-            "API Key 등록/변경",
-            value=st.session_state.api_key,
-            type="password",
-            placeholder="sk-...",
-            help="OpenAI API 키를 입력하면 세션에 즉시 반영됩니다."
-        )
-        if key_input != st.session_state.api_key:
-            st.session_state.api_key = key_input
-            st.rerun()
-
-        # 🧠 AI 모델 선택 (GPT-5.5+ 최신 규격 지원)
-        st.session_state.selected_model = st.selectbox(
-            "🧠 AI 모델 선택 (GPT-5.5+)",
-            options=[
-                "gpt-5.5",
-                "gpt-5.6-sol",
-                "gpt-5.6-luna",
-                "gpt-5.6-terra",
-                "gpt-5",
-                "gpt-5-mini",
-                "gpt-4o"
-            ],
-            index=0
-        )
-
-        # 🎭 시스템 프롬프트 설정
-        st.session_state.system_prompt = st.text_area(
-            "🎭 AI 역할 지침 (System Prompt)",
-            value=st.session_state.get("system_prompt", "당신은 친절하고 명확한 답변을 제공하는 지적인 AI 어시스턴트입니다."),
-            height=70
-        )
-
-        st.divider()
-
-        # 🗄️ 세션 관리 (최대 10개 유지)
-        st.subheader("🗄️ 대화 세션 관리")
-        st.caption("💡 DB에 최대 10개 세션만 보관되며, 초과 시 오래된 세션부터 자동 삭제됩니다.")
-
-        # 새 대화 시작 버튼
-        if st.button("➕ 새 대화 시작 (New Chat)", use_container_width=True, type="primary"):
-            new_sid = str(uuid.uuid4())
-            chat_db.create_session(new_sid, "새로운 대화")
-            st.session_state.current_session_id = new_sid
-            st.rerun()
-
-        # 세션 목록 셀렉트박스
-        all_sessions = chat_db.get_all_sessions()
-        session_map = {s["id"]: f"[{s['created_at'][:10]}] {s['title']}" for s in all_sessions}
-
-        if st.session_state.current_session_id not in session_map:
-            session_map[st.session_state.current_session_id] = "현재 대화 (새로운 대화)"
-
-        session_id_list = list(session_map.keys())
-        curr_idx = session_id_list.index(st.session_state.current_session_id) if st.session_state.current_session_id in session_id_list else 0
-
-        selected_sid = st.selectbox(
-            "보관된 세션 선택 (최대 10개)",
-            options=session_id_list,
-            index=curr_idx,
-            format_func=lambda x: session_map.get(x, x)
-        )
-
-        if selected_sid != st.session_state.current_session_id:
-            st.session_state.current_session_id = selected_sid
-            st.rerun()
-
-        # 현재 대화 세션 삭제 버튼
-        if st.button("🗑️ 현재 세션 삭제", use_container_width=True):
-            chat_db.delete_session(st.session_state.current_session_id)
-            remaining = chat_db.get_all_sessions()
-            if remaining:
-                st.session_state.current_session_id = remaining[0]["id"]
-            else:
-                new_sid = str(uuid.uuid4())
-                chat_db.create_session(new_sid, "새로운 대화")
-                st.session_state.current_session_id = new_sid
-            st.rerun()
-
-    # 3. 화면 분기 렌더링
-    if st.session_state.current_menu == "💬 실시간 AI 채팅":
-        show_chat_page()
+if __name__ == "__main__":
+    if not st.session_state.is_logged_in:
+        show_login_page()
     else:
-        show_history_page()
+        if st.session_state.current_menu == "💬 실시간 AI 채팅":
+            show_chat_page()
+        else:
+            show_history_page()
