@@ -1,33 +1,98 @@
 import streamlit as st
 import pandas as pd
-import base64
 import chat_db
 from styles import apply_custom_css
+
+# ========================================================
+# 관리자 2차 인증 모달 팝업 다이얼로그 (@st.dialog)
+# - 관리자 통계 분석실 접근 시 보안 강화를 위해 팝업으로 추가 인증 수행
+# ========================================================
+@st.dialog("🔒 관리자 2차 보안 인증 (Admin Authentication)")
+def admin_login_dialog():
+    """관리자 통계 분석실 접근을 위한 2차 계정 인증 팝업"""
+    st.markdown("관리자 통계 분석실에 접근하려면 **관리자 전용 계정**으로 한 번 더 인증해야 합니다.")
+    st.caption("💡 기본 관리자 계정: 아이디 `admin` / 비밀번호 `admin1234`")
+
+    # 관리자 계정 정보 입력 폼
+    admin_id = st.text_input("👤 관리자 ID", key="admin_popup_id", placeholder="admin")
+    admin_pw = st.text_input("🔑 관리자 비밀번호", type="password", key="admin_popup_pw", placeholder="••••••••")
+
+    col_login, col_cancel = st.columns(2)
+    with col_login:
+        if st.button("🔓 인증 및 입장", type="primary", use_container_width=True, key="admin_popup_login_btn"):
+            if admin_id.strip() == "admin" and admin_pw.strip() in ["admin1234", "1234", "admin"]:
+                st.session_state.is_admin_authenticated = True
+                st.success("✅ 관리자 인증에 성공했습니다!")
+                st.rerun()
+            else:
+                st.error("❌ 관리자 아이디 또는 비밀번호가 올바르지 않습니다.")
+
+    with col_cancel:
+        if st.button("❌ 취소 및 돌아가기", use_container_width=True, key="admin_popup_cancel_btn"):
+            st.session_state.current_menu = "🤖 AI 멀티모달 챗봇"
+            st.rerun()
+
 
 def show_admin_analytics_page():
     """관리자 전용 통계 분석 및 세션 관리 대시보드"""
     apply_custom_css()
 
-    # 1. 상단 관리자 브랜딩 헤더
-    st.markdown(
-        """
-        <div class="app-brand-header">
-            <div>
-                <h2 style="margin: 0; font-weight: 700; letter-spacing: -0.02em;">📈 관리자 통계 분석실 (Admin Studio)</h2>
-                <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.9rem;">
-                    대화량 추이 시각화 • 사용자/AI 발화 분석 • 세션 상세 감사 및 관리
-                </p>
-            </div>
-            <div class="brand-pill" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.25);">
-                <span class="status-dot" style="background-color: #ef4444; box-shadow: 0 0 8px #ef4444;"></span>
-                <span>Admin Mode</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # 1. 관리자 2차 인증 상태 관리
+    if "is_admin_authenticated" not in st.session_state:
+        st.session_state.is_admin_authenticated = False
 
-    # 2. 상단 핵심 KPI 메트릭 카드 4종
+    # 2. 미인증 상태인 경우 2차 로그인 팝업 다이얼로그 노출 및 차단
+    if not st.session_state.is_admin_authenticated:
+        # 팝업 다이얼로그 즉시 띄우기
+        admin_login_dialog()
+
+        # 배경 안내 카드 (팝업 닫힘 시 재호출 지원)
+        with st.container(border=True):
+            st.warning("""
+            ### 🔒 관리자 2차 보안 인증이 필요합니다
+            관리자 통계 분석실은 전체 대화 세션 감사, 삭제 및 통계 데이터 접근 권한이 포함되어 있습니다.  
+            안전한 시스템 운영을 위해 **관리자 계정으로 한 번 더 인증**을 진행해주세요.
+            """)
+            col_btn1, col_btn2 = st.columns([1, 3])
+            with col_btn1:
+                if st.button("🔑 관리자 인증 팝업 열기", type="primary", use_container_width=True):
+                    admin_login_dialog()
+            with col_btn2:
+                if st.button("💬 실시간 챗봇으로 돌아가기", use_container_width=True):
+                    st.session_state.current_menu = "🤖 AI 멀티모달 챗봇"
+                    st.rerun()
+        return
+
+    # 3. 인증 완료 시: 상단 관리자 브랜딩 헤더 및 모드 종료(잠금) 버튼
+    col_header, col_logout = st.columns([4, 1.2])
+    with col_header:
+        st.markdown(
+            """
+            <div class="app-brand-header" style="margin-bottom: 0.5rem;">
+                <div>
+                    <h2 style="margin: 0; font-weight: 700; letter-spacing: -0.02em;">📈 관리자 통계 분석실 (Admin Studio)</h2>
+                    <p style="margin: 4px 0 0 0; color: #64748b; font-size: 0.9rem;">
+                        대화량 추이 시각화 • 사용자/AI 발화 분석 • 세션 상세 감사 및 관리
+                    </p>
+                </div>
+                <div class="brand-pill" style="background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.25);">
+                    <span class="status-dot" style="background-color: #ef4444; box-shadow: 0 0 8px #ef4444;"></span>
+                    <span>Admin Mode</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with col_logout:
+        st.write("") # 수직 정렬 여백
+        if st.button("🔒 관리자 모드 종료", type="secondary", use_container_width=True, help="관리자 인증을 잠그고 챗봇 화면으로 돌아갑니다."):
+            st.session_state.is_admin_authenticated = False
+            st.session_state.current_menu = "🤖 AI 멀티모달 챗봇"
+            st.rerun()
+
+    st.divider()
+
+    # 4. 상단 핵심 KPI 메트릭 카드 4종
     stats = chat_db.get_db_stats()
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -41,7 +106,7 @@ def show_admin_analytics_page():
 
     st.write("")
 
-    # 3. 2번 페이지 내부 탭 분리 (요구사항 2, 3 적용)
+    # 5. 탭 분리: 통계 및 시각화 vs 세션 데이터 관리
     tab_analytics, tab_management = st.tabs([
         "📊 통계 및 시각화 차트 분석",
         "📋 세션 데이터 상세 & 관리"
@@ -166,10 +231,6 @@ def show_admin_analytics_page():
                         for m in sess_msgs:
                             role_icon = "👤" if m["role"] == "user" else "🤖"
                             st.markdown(f"**{role_icon} {m['role'].upper()}** `[{m['created_at']}]`")
-                            if m.get("files"):
-                                st.caption(f"📎 문서: {', '.join(m['files'])}")
-                            if m.get("images"):
-                                st.caption(f"🖼️ 이미지: {len(m['images'])}장 첨부")
                             st.markdown(m["content"])
                             st.markdown("---")
 
