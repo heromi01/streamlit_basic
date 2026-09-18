@@ -78,7 +78,7 @@ st.markdown(
 # st.switch_page() 동작 버튼
 if st.button("🏠 메인 대시보드로 이동하기 (st.switch_page)", icon=":material/arrow_forward:", type="primary"):
     # stream_pages/main.py 페이지로 즉시 전환
-    st.switch_page(r"stream_pages\main.py")
+    st.switch_page("stream_pages/main.py")
 
-st.caption("※ 위 버튼을 누르면 `st.switch_page(r'stream_pages\\main.py')`가 실행되어 즉시 메인 페이지로 이동합니다.")
+st.caption("※ 위 버튼을 누르면 `st.switch_page('stream_pages/main.py')`가 실행되어 즉시 메인 페이지로 이동합니다.")
 

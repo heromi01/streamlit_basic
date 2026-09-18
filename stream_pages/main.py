@@ -41,16 +41,16 @@ col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     if st.button("🤖 AI 챗봇", icon=":material/chat:", use_container_width=True):
-        st.switch_page(r"stream_pages\chat.py")
+        st.switch_page("stream_pages/chat.py")
 
 with col2:
     if st.button("📊 통계 분석실", icon=":material/bar_chart:", use_container_width=True):
-        st.switch_page(r"stream_pages\analytics.py")
+        st.switch_page("stream_pages/analytics.py")
 
 with col3:
     if st.button("🧭 내비 가이드", icon=":material/explore:", use_container_width=True):
-        st.switch_page(r"stream_pages\navigation.py")
+        st.switch_page("stream_pages/navigation.py")
 
 with col4:
     if st.button("⚙️ 환경 설정", icon=":material/settings:", use_container_width=True):
-        st.switch_page(r"stream_pages\settings.py")
+        st.switch_page("stream_pages/settings.py")

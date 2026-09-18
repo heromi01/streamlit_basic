@@ -39,11 +39,11 @@ def login_screen():
 # 참고: https://docs.streamlit.io/develop/api-reference/navigation/st.page
 login_page = st.Page(login_screen, title="Log in", icon=":material/lock:")
 
-main_page = st.Page(r"stream_pages\main.py", title="메인 대시보드", icon=":material/home:", default=True)
-chat_page = st.Page(r"stream_pages\chat.py", title="AI 챗봇", icon=":material/chat:")
-analytics_page = st.Page(r"stream_pages\analytics.py", title="통계 분석실", icon=":material/bar_chart:")
-nav_page = st.Page(r"stream_pages\navigation.py", title="내비게이션 가이드", icon=":material/explore:")
-settings_page = st.Page(r"stream_pages\settings.py", title="환경 설정", icon=":material/settings:")
+main_page = st.Page("stream_pages/main.py", title="메인 대시보드", icon=":material/home:", default=True)
+chat_page = st.Page("stream_pages/chat.py", title="AI 챗봇", icon=":material/chat:")
+analytics_page = st.Page("stream_pages/analytics.py", title="통계 분석실", icon=":material/bar_chart:")
+nav_page = st.Page("stream_pages/navigation.py", title="내비게이션 가이드", icon=":material/explore:")
+settings_page = st.Page("stream_pages/settings.py", title="환경 설정", icon=":material/settings:")
 
 # 5. 로그인 상태 확인 (st.user.is_logged_in) 및 동적 페이지 라우팅
 is_logged_in = getattr(st.user, "is_logged_in", False)
