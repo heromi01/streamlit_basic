@@ -22,10 +22,13 @@ Streamlit의 핵심 위젯을 실습할 수 있는 **인터랙티브 가이드**
 
 ```text
 streamlit_basic/
-├── app.py               # ⚡ [메인 통합 포털] AI 챗봇 + 히스토리 + 관리자 분석실 + 위젯 랩
-├── app2.py              # 🤖 OpenAI 멀티모달 AI 챗봇 (미니 세션 현황판 내장)
+├── app.py               # ⚡ [위젯 랩 통합 포털] AI 챗봇 + 히스토리 + 관리자 분석실 + 위젯 랩
+├── app2.py              # 🍎 [공식 스튜디오 허브] Streamlit 공식 OIDC 인증 & st.navigation 다중 페이지 스튜디오
+├── app2-openai.py       # 🤖 OpenAI 멀티모달 AI 챗봇 (미니 세션 현황판 내장)
 ├── app2_history.py      # 📜 대화 히스토리 대시보드
 ├── admin_analytics.py   # 📈 [신규] 관리자 통계 분석실 (일자별 차트/발화비율/세션 관리)
+├── stream_pages/        # 📄 st.navigation 공식 하위 페이지들 (main, chat, analytics, navigation, settings)
+├── templates/           # 🖼️ 분리된 Apple 디자인 HTML/CSS 템플릿 (login_card, user_profile, theme)
 ├── styles.py            # 🎨 모던 프리미엄 테마 & 커스텀 CSS 모듈
 ├── chat_db.py           # 🗄️ SQLite 기반 대화 세션 및 통계 관리 모듈
 ├── tabs/                # 📚 위젯 랩 기능별 모듈
@@ -55,13 +58,17 @@ OPENAI_API_KEY=your_openai_api_key_here
 # 의존성 패키지 동기화
 uv sync
 
-# [통합 포털 실행] 챗봇, 히스토리, 위젯 랩을 한 곳에서 실행
-uv run streamlit run app.py
+# [Streamlit AI Studio 공식 포털 실행 (권장)]
+uv run streamlit run app2.py
 
-# 또는 배치 파일 실행
+# 또는 원클릭 배치 파일 실행
 run.bat
+
+# [기존 위젯 랩 통합 포털 실행]
+uv run streamlit run app.py
 ```
 
 > **단독 실행 지원**: 특정 화면만 독립적으로 띄우고 싶은 경우 아래 명령어로도 실행할 수 있습니다.
-> - AI 챗봇 단독: `uv run streamlit run app2.py`
+> - 공식 AI Studio 포털: `uv run streamlit run app2.py`
+> - AI 챗봇 단독: `uv run streamlit run app2-openai.py`
 > - 대화 히스토리 단독: `uv run streamlit run app2_history.py`

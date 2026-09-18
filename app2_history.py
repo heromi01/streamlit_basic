@@ -14,8 +14,9 @@ def render_history_page(chat_page=None):
 
     # 로그인 여부 검증 (미인증 사용자는 로그인 화면 렌더링 후 차단)
     if not st.session_state.get("is_logged_in", False):
-        from app2 import show_login_page
-        show_login_page()
+        import importlib
+        app2_openai = importlib.import_module("app2-openai")
+        app2_openai.show_login_page()
         return
 
     # 1. 상단 타이틀 및 간결한 소개 안내
@@ -166,7 +167,7 @@ def render_history_page(chat_page=None):
                 st.caption(f"{role_name} • {msg['created_at']}")
                 st.markdown(msg["content"])
 
-# app2.py와의 호환을 위한 별칭
+# app2-openai.py와의 호환을 위한 별칭
 show_history_page = render_history_page
 
 # app2_history.py 단독 실행 지원

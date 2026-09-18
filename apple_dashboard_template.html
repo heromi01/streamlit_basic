@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Apple-Style Fluid Dashboard Template</title>
+  <style>
+    /* ==========================================================================
+       Apple Design System — Tokens & Theming (Streamlit Component Compatible)
+       Reference: apple-design-principles.md
+       ========================================================================== */
+    :root {
+      --system-bg: #f5f5f7;
+      --system-text: #1d1d1f;
+      --system-secondary: #86868b;
+      --system-tint: #0071e3;
+      --system-green: #34c759;
+      --system-orange: #ff9500;
+      
+      --chrome-bg: rgba(255, 255, 255, 0.72);
+      --chrome-border: rgba(0, 0, 0, 0.08);
+      --card-bg: rgba(255, 255, 255, 0.68);
+      --card-border: rgba(255, 255, 255, 0.6);
+      --card-inner-highlight: inset 0 1px 1px rgba(255, 255, 255, 0.8);
+      --card-shadow: 0 8px 32px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.03);
+      --card-shadow-hover: 0 14px 44px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+      --material-blur: 24px;
+      
+      --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Pretendard", system-ui, sans-serif;
+      --spring-ease: cubic-bezier(0.25, 1, 0.5, 1);
+      --instant-feedback: 0.12s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --system-bg: #000000;
+        --system-text: #f5f5f7;
+        --system-secondary: #a1a1a6;
+        --system-tint: #2997ff;
+        --chrome-bg: rgba(28, 28, 30, 0.75);
+        --chrome-border: rgba(255, 255, 255, 0.12);
+        --card-bg: rgba(36, 36, 38, 0.65);
+        --card-border: rgba(255, 255, 255, 0.14);
+        --card-inner-highlight: inset 0 1px 1px rgba(255, 255, 255, 0.15);
+        --card-shadow: 0 10px 36px rgba(0, 0, 0, 0.45);
+        --card-shadow-hover: 0 18px 50px rgba(0, 0, 0, 0.65);
+      }
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--system-bg);
+      color: var(--system-text);
+      font-family: var(--font-stack);
+      line-height: 1.5;
+      padding: 2rem 1.5rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1.display-title {
+      font-size: clamp(2rem, 4vw, 2.8rem);
+      font-weight: 700;
+      letter-spacing: -0.035em;
+      line-height: 1.1;
+      margin-bottom: 0.5rem;
+    }
+
+    p.body-text {
+      font-size: 1.05rem;
+      color: var(--system-secondary);
+      letter-spacing: -0.005em;
+      line-height: 1.6;
+      max-width: 650px;
+    }
+
+    .caption-text {
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: var(--system-secondary);
+      text-transform: uppercase;
+    }
+
+    .bento-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 1.5rem;
+      margin-top: 2rem;
+    }
+
+    .glass-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(var(--material-blur)) saturate(160%);
+      -webkit-backdrop-filter: blur(var(--material-blur)) saturate(160%);
+      border: 1px solid var(--card-border);
+      box-shadow: var(--card-shadow), var(--card-inner-highlight);
+      border-radius: 20px;
+      padding: 1.75rem;
+      transition: transform 0.35s var(--spring-ease), box-shadow 0.35s var(--spring-ease);
+    }
+
+    .glass-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--card-shadow-hover), var(--card-inner-highlight);
+    }
+
+    .col-4 { grid-column: span 4; }
+    .col-8 { grid-column: span 8; }
+    .col-12 { grid-column: span 12; }
+
+    @media (max-width: 860px) {
+      .col-4, .col-8 { grid-column: span 12; }
+    }
+
+    .metric-value {
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0.5rem 0 0.25rem 0;
+    }
+
+    button.apple-btn {
+      appearance: none;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 500;
+      padding: 9px 18px;
+      border-radius: 9999px;
+      background: var(--system-tint);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(0, 113, 227, 0.25);
+      transition: transform 0.28s var(--spring-ease);
+    }
+
+    button.apple-btn:active {
+      transform: scale(0.96);
+      transition-duration: var(--instant-feedback);
+    }
+  </style>
+</head>
+<body>
+  <div class="header-zone">
+    <span class="caption-text">Apple Motion & Material Principles</span>
+    <h1 class="display-title">Fluid Dashboard Architecture</h1>
+    <p class="body-text">
+      투명 소재(Vibrancy & Frosted Glass), 즉각 반응(Zero Latency), 스프링 역학을 결합한 대시보드 컴포넌트 템플릿입니다.
+    </p>
+  </div>
+
+  <div class="bento-grid">
+    <div class="glass-card col-4">
+      <span class="caption-text">Response Time</span>
+      <div class="metric-value">0ms</div>
+      <p style="font-size: 0.9rem; color: var(--system-secondary);">터치다운 순간 즉시 압축 반응 제공</p>
+    </div>
+    <div class="glass-card col-4">
+      <span class="caption-text">Spring Ratio</span>
+      <div class="metric-value">ζ 1.0</div>
+      <p style="font-size: 0.9rem; color: var(--system-secondary);">임계 감쇠 기반의 인터럽터블 모션</p>
+    </div>
+    <div class="glass-card col-4">
+      <span class="caption-text">Material Blur</span>
+      <div class="metric-value">24px</div>
+      <p style="font-size: 0.9rem; color: var(--system-secondary);">프로스티드 글래스 계층 투과</p>
+    </div>
+  </div>
+</body>
+</html>
+

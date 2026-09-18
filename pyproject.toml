@@ -3,8 +3,9 @@ name = "streamlit-basic"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
+    "authlib>=1.8.0",
     "openai>=3.14.1",
     "pandas>=3.0.5",
     "python-dotenv>=1.2.3",
-    "streamlit>=1.64.0",
+    "streamlit[auth]>=1.64.0",
 ]

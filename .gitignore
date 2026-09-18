@@ -20,6 +20,8 @@ chat_history.db
 
 # Streamlit
 .streamlit/secrets.toml
+.streamlit/*.json
+.streamlit/client_secret*.json
 
 # IDE & Editor
 .vscode/

@@ -24,8 +24,9 @@ if "is_logged_in" not in st.session_state:
     st.session_state.is_logged_in = False
 
 if not st.session_state.is_logged_in:
-    from app2 import show_login_page
-    show_login_page()
+    import importlib
+    app2_openai = importlib.import_module("app2-openai")
+    app2_openai.show_login_page()
     # 로그인하기 전에는 아래 사이드바 및 대화 히스토리/통계 분석실 렌더링을 완전히 차단
     st.stop()
 
@@ -76,8 +77,9 @@ with st.sidebar:
 # 4. 메뉴별 화면 라우팅 (인증된 사용자만 접근 가능)
 # ========================================================
 if menu == "🤖 AI 멀티모달 챗봇":
-    from app2 import show_chat_page
-    show_chat_page()
+    import importlib
+    app2_openai = importlib.import_module("app2-openai")
+    app2_openai.show_chat_page()
 
 elif menu == "📜 대화 히스토리 & 분석":
     from app2_history import show_history_page
