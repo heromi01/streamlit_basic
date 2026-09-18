@@ -1,7 +1,4 @@
-import os
-from dotenv import load_dotenv
 import streamlit as st
-from streamlit.runtime.secrets import secrets_singleton
 from styles import apply_custom_css, render_login_card, render_user_profile
 
 # ==============================================================================
@@ -9,24 +6,8 @@ from styles import apply_custom_css, render_login_card, render_user_profile
 # 인증 문서: https://docs.streamlit.io/develop/api-reference/user
 # 내비게이션 문서: https://docs.streamlit.io/develop/api-reference/navigation
 # 디자인 가이드: apple-design-principles.md
+# 인증 환경설정: .streamlit/secrets.toml
 # ==============================================================================
-
-# 0. .env 환경 변수 로드 및 Streamlit 공식 Secrets 동적 주입
-# secrets.toml 대신 .env 파일에서 Google OIDC 인증 정보를 불러옵니다.
-load_dotenv()
-
-secrets_singleton.merge_programmatic_secrets({
-    "auth": {
-        "redirect_uri": os.getenv("AUTH_REDIRECT_URI", "http://localhost:8501/oauth2callback"),
-        "cookie_secret": os.getenv("AUTH_COOKIE_SECRET", "0123456789abcdef0123456789abcdef"),
-        "client_id": os.getenv("AUTH_CLIENT_ID", ""),
-        "client_secret": os.getenv("AUTH_CLIENT_SECRET", ""),
-        "server_metadata_url": os.getenv(
-            "AUTH_SERVER_METADATA_URL",
-            "https://accounts.google.com/.well-known/openid-configuration"
-        ),
-    }
-})
 
 # 1. 페이지 기본 설정
 st.set_page_config(
@@ -91,4 +72,3 @@ else:
 # 6. 애플리케이션 실행
 if __name__ == "__main__":
     pg.run()
-
